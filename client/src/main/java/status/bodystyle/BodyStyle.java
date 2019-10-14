@@ -2,14 +2,14 @@ package status.bodystyle;
 
 import lombok.Getter;
 import status.StatusProcessor;
+import status.chunkstatus.ChunkNumProcessor;
 
 /**
  * HTTP Body의 상태를 세분화합니다.
  */
 public enum BodyStyle {
-    NO_BODY(new NoBodyProcessor()),
     CONTENT_LENGTH(new ContentLengthProcessor()),
-    CHUNKED(new ChunkedProcessor());
+    CHUNKED(new ChunkNumProcessor());
 
     @Getter
     private final StatusProcessor processor;

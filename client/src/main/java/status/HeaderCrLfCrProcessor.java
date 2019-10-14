@@ -1,11 +1,8 @@
 package status;
 
-import status.bodystyle.BodyStyle;
 import domain.MessageBag;
 
 import static domain.MessageBag.LF;
-import static status.Status.BODY;
-import static status.Status.TERMINATION;
 
 public class HeaderCrLfCrProcessor implements StatusProcessor {
     @Override
@@ -15,11 +12,7 @@ public class HeaderCrLfCrProcessor implements StatusProcessor {
         // 지금까지 들어온 요청 라인과 헤더를 파싱하여
         // 메시지 바디 유무를 판단하여 더 필요하면 읽기를 계속합니다.
         if (curByte == LF) {
-            if (messageBag.afterHeader() == BodyStyle.NO_BODY) {
-                return TERMINATION.getProcessor();
-            }
-
-            return BODY.getProcessor();
+            return messageBag.getBodyStyleProcessor();
         }
 
         throw new IllegalStateException("LF must be followed.");

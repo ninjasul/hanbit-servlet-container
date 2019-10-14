@@ -86,6 +86,7 @@ public class HttpClient {
             //selector = Selector.open();
 
             socketChannel.register(selector, SelectionKey.OP_READ);
+
             while (!isEnd) {
                 // 이제 SELECT_INTERVAL 시간 만큼 위에서 지정한 (READ) 이벤트를 기다립니다.
                 selector.select(HttpClient.SELECT_INTERVAL);
@@ -94,11 +95,13 @@ public class HttpClient {
                 // 첫 번째는 대기하던 이벤트가 왔다면 반환됩니다.
                 // 두 번째는 이벤트가 오지 않아도 지정한 타임아웃 시간(SELECT_INTERVAL)이
                 // 지나면 반환됩니다.
+
                 // 두 번째 경우에는 selectionKeys.iterator().hasNext()가 false이므로
                 // 다시 위의 while 루프로 돌아가 다시 select 메서드에서
                 // 이벤트를 대기하게 되겠습니다.
                 Set<SelectionKey> selectionKeys = selector.keys();
                 Iterator<SelectionKey> selectionKeyIter = selectionKeys.iterator();
+
                 while (selectionKeyIter.hasNext()) {
                     SelectionKey selectionKey = selectionKeyIter.next();
 
@@ -119,6 +122,7 @@ public class HttpClient {
                         // 앞에서 저장된 내용과 합쳐 전체 메시지가 전달됐는지 확인하게 됩니다.
                         // 이를 위해 저장하여 두는 곳이 바로 SelectionKey.attachment가 되겠습니다.
                         MessageBag messageBag = (MessageBag) selectionKey.attachment();
+
                         if (messageBag == null) {
                             messageBag = new MessageBag();
                             selectionKey.attach(messageBag);
@@ -135,12 +139,11 @@ public class HttpClient {
                             // HTTP 메시지에서 현재 어떤 상태인지 확인하며 처리하게 됩니다.
                             byte curByte = readBuffer.get();
 
-                            StatusProcessor processor = messageBag.getStatusProcessor();
-                            if(processor.isTerminated()) {
+                            if(messageBag.isTerminated()) {
                                 break;
                             }
 
-                            processor.proceed(messageBag, curByte);
+                            messageBag.proceed(curByte);
 
 /*
                             // 처음 시작입니다. 상태를 요청 라인으로 바꿉니다.
@@ -189,7 +192,7 @@ public class HttpClient {
                                 // 지금까지 들어온 요청 라인과 헤더를 파싱하여
                                 // 메시지 바디 유무를 판단하여 더 필요하면 읽기를 계속합니다.
                                 if (curByte == LF) {
-                                    BodyStyle bodyStyle = messageBag.afterHeader();
+                                    BodyStyle bodyStyle = messageBag.getBodyStyleFromHeader();
                                     if (bodyStyle == BodyStyle.NO_BODY) {
                                         messageBag.status = Status.TERMINATION;
                                         break;
@@ -269,7 +272,7 @@ public class HttpClient {
                         // 지금까지 읽어들인 값을 다시 SelectionKey.attachment에 넣어둡니다.
                         selectionKey.attach(messageBag);
 
-                        if (messageBag.getStatusProcessor().isTerminated()) {
+                        if (messageBag.isTerminated()) {
                         //if (messageBag.getStatus().equals(Status.TERMINATION)) {
                             // 메시지를 끝까지 다 읽은 것이라면
                             // SelectionKey.attachment 를 제거하고
