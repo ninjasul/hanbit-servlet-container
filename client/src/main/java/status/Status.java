@@ -1,7 +1,6 @@
 package status;
 
 import lombok.Getter;
-import status.*;
 
 /**
  * HTTP 메시지가 가질 수 있는 상태를 표시합니다.
@@ -18,10 +17,10 @@ public enum Status {
     BODY(new BodyProcessor()),
     TERMINATION(new TerminationProcessor());
 
+    @Getter
+    private final StatusProcessor processor;
+
     Status(StatusProcessor processor) {
         this.processor = processor;
     }
-
-    @Getter
-    private StatusProcessor processor;
 }

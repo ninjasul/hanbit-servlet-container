@@ -2,7 +2,7 @@ package status;
 
 import domain.MessageBag;
 
-import static domain.HttpClient.LF;
+import static domain.MessageBag.LF;
 import static status.Status.HEADER_CRLF;
 
 public class HeaderCrProcessor implements StatusProcessor {

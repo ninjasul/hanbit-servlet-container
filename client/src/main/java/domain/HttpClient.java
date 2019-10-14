@@ -1,6 +1,6 @@
 package domain;
 
-import status.Status;
+import status.StatusProcessor;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -13,8 +13,6 @@ import java.util.*;
 public class HttpClient {
     public static final long SELECT_INTERVAL = 200L;
     public static final int BUFFER_SIZE = 256;
-    public static final byte CR = '\r';
-    public static final byte LF = '\n';
 
     private static final ByteBuffer readBuffer = ByteBuffer.allocate(HttpClient.BUFFER_SIZE);
 
@@ -70,13 +68,14 @@ public class HttpClient {
 
     // 생성자에서 세팅된 값을 기반으로 실제 전송을 시도합니다.
     public void send() {
-        SocketChannel socketChannel = null;
-        Selector selector = null;
+        //SocketChannel socketChannel = null;
+        //Selector selector = null;
         boolean isEnd = false;
-        try {
+        //try {
 
-            // 먼저 소켓 채널을 생성한 후, 비동기 설정인 non-blocking을 추가합니다.
-            socketChannel = SocketChannel.open(new InetSocketAddress(host, port));
+        // 먼저 소켓 채널을 생성한 후, 비동기 설정인 non-blocking을 추가합니다.
+        try(SocketChannel socketChannel = SocketChannel.open(new InetSocketAddress(host, port));
+            Selector selector = Selector.open()) {
             socketChannel.configureBlocking(false);
 
             // 앞서 보낼 내용을 지정한 sendBytes를 ByteBuffer 형태로 바꾼 후 전송합니다.
@@ -84,7 +83,8 @@ public class HttpClient {
 
             // 이제 본격적으로 비동기적으로 읽기가 시작됩니다.
             // 셀렉터를 하나 열고, 읽기 이벤트가 발생하면 깨어나겠다는 것을 지정합니다.
-            selector = Selector.open();
+            //selector = Selector.open();
+
             socketChannel.register(selector, SelectionKey.OP_READ);
             while (!isEnd) {
                 // 이제 SELECT_INTERVAL 시간 만큼 위에서 지정한 (READ) 이벤트를 기다립니다.
@@ -133,54 +133,62 @@ public class HttpClient {
                         while (readBuffer.hasRemaining()) {
                             // 읽어들인 내용을 앞에서부터 한 바이트씩 보고
                             // HTTP 메시지에서 현재 어떤 상태인지 확인하며 처리하게 됩니다.
-                            byte oneByte = readBuffer.get();
+                            byte curByte = readBuffer.get();
 
+                            StatusProcessor processor = messageBag.getStatusProcessor();
+                            if(processor.isTerminated()) {
+                                break;
+                            }
+
+                            processor.proceed(messageBag, curByte);
+
+/*
                             // 처음 시작입니다. 상태를 요청 라인으로 바꿉니다.
                             if (messageBag.getStatus().equals(Status.INIT)) {
-                                messageBag.add(oneByte);
+                                messageBag.add(curByte);
                                 messageBag.status = Status.REQUEST_LINE;
 
                                 // 첫 줄인 요청 라인을 읽어들이다가 \r이 나오면 한 행이 끝남을,
                                 // 곧 요청 라인이 종료되었음을 알 수 있습니다.
                             } else if (messageBag.getStatus().equals(Status.REQUEST_LINE)) {
-                                if (oneByte == CR) {
+                                if (curByte == CR) {
                                     messageBag.status = Status.REQUEST_LINE_CR;
                                     messageBag.setRequestLine();
                                 } else {
-                                    messageBag.add(oneByte);
+                                    messageBag.add(curByte);
                                 }
                             } else if (messageBag.getStatus().equals(Status.REQUEST_LINE_CR)) {
                                 messageBag.status = Status.REQUEST_LINE_CRLF;
                             } else if (messageBag.getStatus().equals(Status.REQUEST_LINE_CRLF)) {
                                 // 요청 라인이 종료된 이후에는 헤더로 간주합니다.
-                                messageBag.add(oneByte);
+                                messageBag.add(curByte);
                                 messageBag.status = Status.HEADER;
                             } else if (messageBag.getStatus().equals(Status.HEADER)) {
-                                if (oneByte == CR) {
+                                if (curByte == CR) {
                                     messageBag.addHeader();
                                     messageBag.status = Status.HEADER_CR;
                                 } else {
-                                    messageBag.add(oneByte);
+                                    messageBag.add(curByte);
                                 }
                             } else if (messageBag.getStatus().equals(Status.HEADER_CR)) {
                                 // 헤더 상태에서 \r을 만나면 하나의 헤더값이 완성되었다고 간주합니다.
-                                if (oneByte == LF) {
+                                if (curByte == LF) {
                                     messageBag.status = Status.HEADER_CRLF;
                                 } else {
                                     throw new IllegalStateException("LF must be followed.");
                                 }
                             } else if (messageBag.getStatus().equals(Status.HEADER_CRLF)) {
-                                if (oneByte == CR) {
+                                if (curByte == CR) {
                                     messageBag.status = Status.HEADER_CRLFCR;
                                 } else {
-                                    messageBag.add(oneByte);
+                                    messageBag.add(curByte);
                                     messageBag.status = Status.HEADER;
                                 }
                             } else if (messageBag.getStatus().equals(Status.HEADER_CRLFCR)) {
                                 // 빈 헤더값을 만나면 이제 헤더부가 끝났고
                                 // 지금까지 들어온 요청 라인과 헤더를 파싱하여
                                 // 메시지 바디 유무를 판단하여 더 필요하면 읽기를 계속합니다.
-                                if (oneByte == LF) {
+                                if (curByte == LF) {
                                     BodyStyle bodyStyle = messageBag.afterHeader();
                                     if (bodyStyle == BodyStyle.NO_BODY) {
                                         messageBag.status = Status.TERMINATION;
@@ -197,7 +205,7 @@ public class HttpClient {
                                 if (messageBag.bodyStyle == BodyStyle.CONTENT_LENGTH) {
 
                                     // Content-Length 헤더가 있다면 해당 헤더 값만큼 바디를 추가로 읽습니다.
-                                    messageBag.add(oneByte);
+                                    messageBag.add(curByte);
                                     if (messageBag.getContentLength() <= messageBag.getBytesSize()) {
 
                                         // 메시지 바디를 끝까지 다 읽었다면
@@ -209,14 +217,14 @@ public class HttpClient {
                                 } else if (messageBag.bodyStyle == BodyStyle.CHUNKED) {
                                     // 메시지 청크 방식인 경우 HTTP 바디에 대해 다시 상태 기계를 만듭니다.
                                     if (messageBag.chunkStatus == ChunkStatus.CHUNK_NUM) {
-                                        if (oneByte == CR) {
+                                        if (curByte == CR) {
                                             messageBag.setChunkSize(Integer.parseInt(new String(messageBag.toBytes()), 16));
                                             messageBag.chunkStatus = ChunkStatus.CHUNK_NUM_CR;
                                         } else {
-                                            messageBag.add(oneByte);
+                                            messageBag.add(curByte);
                                         }
                                     } else if (messageBag.chunkStatus == ChunkStatus.CHUNK_NUM_CR) {
-                                        if (oneByte == LF) {
+                                        if (curByte == LF) {
                                             if (messageBag.getChunkSize() == 0) {
                                                 // 크기가 0인 청크는 청크 방식 메시지 바디의 끝을 의미합니다.
                                                 // 메시지 상태를 종료로 표시하고 나갑니다.
@@ -231,37 +239,38 @@ public class HttpClient {
                                         }
                                     } else if (messageBag.chunkStatus == ChunkStatus.CHUNK_BODY) {
                                         if (messageBag.getBytesSize() == messageBag.getChunkSize() - 1) {
-                                            messageBag.add(oneByte);
+                                            messageBag.add(curByte);
                                             messageBag.addChunk();
                                             messageBag.chunkStatus = ChunkStatus.CHUNK_END;
                                         } else {
-                                            messageBag.add(oneByte);
+                                            messageBag.add(curByte);
                                         }
                                     } else if (messageBag.chunkStatus == ChunkStatus.CHUNK_END) {
-                                        if (oneByte == CR) {
+                                        if (curByte == CR) {
                                             messageBag.chunkStatus = ChunkStatus.CHUNK_CR;
                                         } else {
                                             throw new IllegalStateException("CR must be followed by chunk");
                                         }
                                     } else if (messageBag.chunkStatus == ChunkStatus.CHUNK_CR) {
-                                        if (oneByte == LF) {
+                                        if (curByte == LF) {
                                             messageBag.chunkStatus = ChunkStatus.CHUNK_CRLF;
                                         } else {
                                             throw new IllegalStateException("LF must be followed by CR");
                                         }
                                     } else if (messageBag.chunkStatus == ChunkStatus.CHUNK_CRLF) {
-                                        messageBag.add(oneByte);
+                                        messageBag.add(curByte);
                                         messageBag.chunkStatus = ChunkStatus.CHUNK_NUM;
                                     }
                                 }
-                            }
+                            }*/
                         }
 
                         // 읽기 버퍼를 끝까지 다 읽었습니다.
                         // 지금까지 읽어들인 값을 다시 SelectionKey.attachment에 넣어둡니다.
                         selectionKey.attach(messageBag);
 
-                        if (messageBag.getStatus().equals(Status.TERMINATION)) {
+                        if (messageBag.getStatusProcessor().isTerminated()) {
+                        //if (messageBag.getStatus().equals(Status.TERMINATION)) {
                             // 메시지를 끝까지 다 읽은 것이라면
                             // SelectionKey.attachment 를 제거하고
                             // 지금까지 읽어들인 값을 표시합니다.
@@ -273,25 +282,10 @@ public class HttpClient {
                     }
                 }
             }
-            socketChannel.close();
-            selector.close();
+            //socketChannel.close();
+            //selector.close();
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            if (socketChannel != null) {
-                try {
-                    socketChannel.close();
-                } catch (IOException e) {
-                }
-            }
-            ;
-            if (selector != null) {
-                try {
-                    selector.close();
-                } catch (IOException e) {
-                }
-            }
-            ;
         }
     }
 

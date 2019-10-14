@@ -2,7 +2,7 @@ package status;
 
 import domain.MessageBag;
 
-import static domain.HttpClient.CR;
+import static domain.MessageBag.CR;
 import static status.Status.HEADER;
 import static status.Status.HEADER_CRLFCR;
 

@@ -1,20 +1,29 @@
 package domain;
 
+import status.bodystyle.BodyStyle;
+import status.chunkstatus.ChunkStatus;
 import lombok.Getter;
 import lombok.Setter;
 import status.InitProcessor;
-import status.Status;
 import status.StatusProcessor;
 
 import java.util.*;
 
 
 public class MessageBag {
-    // 이 클래스는 HTTP 메시지를 구성하는 구성 요소를 표현할 수 있게 구성되었습니다.
-    @Getter @Setter
-    private Status status = Status.INIT;
+    public static final byte CR = '\r';
+    public static final byte LF = '\n';
 
+    // 이 클래스는 HTTP 메시지를 구성하는 구성 요소를 표현할 수 있게 구성되었습니다.
+    //@Getter @Setter
+    //private Status status = Status.INIT;
+
+    @Getter
     private StatusProcessor statusProcessor = new InitProcessor();
+
+    private StatusProcessor bodyStyleProcessor;
+
+    private StatusProcessor chunkedProcessor;
 
     private List<Byte> byteList = new ArrayList<Byte>();
     private String requestLine;
@@ -137,5 +146,14 @@ public class MessageBag {
 
     public void proceed(byte curByte) {
         statusProcessor = statusProcessor.proceed(this, curByte);
+    }
+
+
+    public StatusProcessor getBodyStyleProcessor() {
+        return bodyStyle.getProcessor();
+    }
+
+    public StatusProcessor getChunkedProcessor() {
+        return chunkStatus.getProcessor();
     }
 }

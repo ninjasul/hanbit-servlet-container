@@ -1,9 +1,9 @@
 package status;
 
-import domain.BodyStyle;
+import status.bodystyle.BodyStyle;
 import domain.MessageBag;
 
-import static domain.HttpClient.LF;
+import static domain.MessageBag.LF;
 import static status.Status.BODY;
 import static status.Status.TERMINATION;
 
